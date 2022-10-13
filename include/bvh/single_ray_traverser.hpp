@@ -65,7 +65,8 @@ private:
     template <typename PrimitiveIntersector, typename Statistics>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
-    intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics) const {
+    intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
+              std::unordered_set<size_t> &traversed) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
         // If the root is a leaf, intersect it and return
@@ -79,6 +80,7 @@ private:
         // allow to cull more subtrees with the ray-box test of the traversal loop.
         Stack stack;
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
+        traversed.insert(0);
         while (true) {
             statistics.traversal_steps++;
 
@@ -105,6 +107,9 @@ private:
                 }
             } else
                 right_child = nullptr;
+
+            if (left_child) traversed.insert(left_child - &bvh.nodes[0]);
+            if (right_child) traversed.insert(right_child - &bvh.nodes[0]);
 
             if (left_child) {
                 if (right_child) {
@@ -142,7 +147,7 @@ public:
     template <typename PrimitiveIntersector>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
-    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector) const {
+    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector, std::unordered_set<size_t> &traversed) const {
         struct {
             struct Empty {
                 Empty& operator ++ (int)    { return *this; }
@@ -150,16 +155,7 @@ public:
                 Empty& operator += (size_t) { return *this; }
             } traversal_steps, intersections;
         } statistics;
-        return intersect(ray, intersector, statistics);
-    }
-
-    /// Intersects the BVH with the given ray and intersector.
-    /// Record statistics on the number of traversal and intersection steps.
-    template <typename PrimitiveIntersector>
-    bvh_always_inline
-    std::optional<typename PrimitiveIntersector::Result>
-    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics) const {
-        return intersect(ray, primitive_intersector, statistics);
+        return intersect(ray, intersector, statistics, traversed);
     }
 };
 
