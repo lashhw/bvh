@@ -67,7 +67,7 @@ private:
     std::optional<typename PrimitiveIntersector::Result>
     intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
               std::unordered_set<size_t> &traversed,
-              std::vector<size_t> &load_history) const {
+              std::vector<size_t> &node_load_trace) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
         // If the root is a leaf, intersect it and return
@@ -88,8 +88,8 @@ private:
             auto* right_child = left_child + 1;
             auto distance_left  = node_intersector.intersect(*left_child,  ray);
             auto distance_right = node_intersector.intersect(*right_child, ray);
-            load_history.push_back(left_child - &bvh.nodes[0]);
-            load_history.push_back(right_child - &bvh.nodes[0]);
+            node_load_trace.push_back(left_child - &bvh.nodes[0]);
+            node_load_trace.push_back(right_child - &bvh.nodes[0]);
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
@@ -152,7 +152,7 @@ public:
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector,
              std::unordered_set<size_t> &traversed,
-             std::vector<size_t> &load_history) const {
+             std::vector<size_t> &node_load_trace) const {
         struct {
             struct Empty {
                 Empty& operator ++ (int)    { return *this; }
@@ -160,7 +160,7 @@ public:
                 Empty& operator += (size_t) { return *this; }
             } traversal_steps, intersections;
         } statistics;
-        return intersect(ray, intersector, statistics, traversed, load_history);
+        return intersect(ray, intersector, statistics, traversed, node_load_trace);
     }
 };
 
