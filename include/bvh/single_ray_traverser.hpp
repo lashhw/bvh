@@ -2,6 +2,7 @@
 #define BVH_SINGLE_RAY_TRAVERSAL_HPP
 
 #include <cassert>
+#include <unordered_map>
 
 #include "bvh/bvh.hpp"
 #include "bvh/ray.hpp"
@@ -15,6 +16,10 @@ template <typename Bvh, size_t StackSize = 64, typename NodeIntersector = FastNo
 class SingleRayTraverser {
 public:
     static constexpr size_t stack_size = StackSize;
+
+    enum NodeRecord {
+        HIT, MISS, PRUNED
+    };
 
 private:
     using Scalar = typename Bvh::ScalarType;
@@ -66,7 +71,7 @@ private:
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
     intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
-              std::unordered_set<size_t> &traversed,
+              std::unordered_map<size_t, NodeRecord> &traversed,
               std::vector<size_t> &node_load_trace) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
@@ -81,15 +86,27 @@ private:
         // allow to cull more subtrees with the ray-box test of the traversal loop.
         Stack stack;
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
-        traversed.insert(0);
         while (true) {
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
             auto distance_left  = node_intersector.intersect(*left_child,  ray);
             auto distance_right = node_intersector.intersect(*right_child, ray);
-            node_load_trace.push_back(left_child - &bvh.nodes[0]);
-            node_load_trace.push_back(right_child - &bvh.nodes[0]);
+
+            auto left_child_idx = left_child - &bvh.nodes[0];
+            auto right_child_idx = right_child - &bvh.nodes[0];
+
+            node_load_trace.push_back(left_child_idx);
+            node_load_trace.push_back(right_child_idx);
+
+            if (distance_left.first <= distance_left.second) {
+                distance_left.first = robust_max(distance_left.first, ray.tmin);
+                distance_left.second = robust_min(distance_left.second, ray.tmax);
+                if (distance_left.first <= distance_left.second) traversed[left_child_idx] = HIT;
+                else traversed[left_child_idx] = PRUNED;
+            } else {
+                traversed[left_child_idx] = MISS;
+            }
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
@@ -102,6 +119,15 @@ private:
                 left_child = nullptr;
 
             if (distance_right.first <= distance_right.second) {
+                distance_right.first = robust_max(distance_right.first, ray.tmin);
+                distance_right.second = robust_min(distance_right.second, ray.tmax);
+                if (distance_right.first <= distance_right.second) traversed[right_child_idx] = HIT;
+                else traversed[right_child_idx] = PRUNED;
+            } else {
+                traversed[right_child_idx] = MISS;
+            }
+
+            if (distance_right.first <= distance_right.second) {
                 if (bvh_unlikely(right_child->is_leaf())) {
                     if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics) &&
                         primitive_intersector.any_hit)
@@ -110,9 +136,6 @@ private:
                 }
             } else
                 right_child = nullptr;
-
-            if (left_child) traversed.insert(left_child - &bvh.nodes[0]);
-            if (right_child) traversed.insert(right_child - &bvh.nodes[0]);
 
             if (left_child) {
                 if (right_child) {
@@ -151,7 +174,7 @@ public:
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector,
-             std::unordered_set<size_t> &traversed,
+             std::unordered_map<size_t, NodeRecord> &traversed,
              std::vector<size_t> &node_load_trace) const {
         struct {
             struct Empty {
