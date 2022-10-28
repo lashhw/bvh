@@ -1,7 +1,9 @@
 #ifndef BVH_SINGLE_RAY_TRAVERSAL_HPP
 #define BVH_SINGLE_RAY_TRAVERSAL_HPP
 
+#include <bitset>
 #include <cassert>
+#include <stack>
 
 #include "bvh/bvh.hpp"
 #include "bvh/ray.hpp"
@@ -38,6 +40,12 @@ private:
         bool empty() const { return size == 0; }
     };
 
+    struct StackElement {
+        typename Bvh::IndexType node_index;
+        std::bitset<64> path;
+        size_t depth;
+    };
+
     template <typename PrimitiveIntersector, typename Statistics>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>& intersect_leaf(
@@ -65,7 +73,8 @@ private:
     template <typename PrimitiveIntersector, typename Statistics>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
-    intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics) const {
+    intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
+              std::bitset<64> &closest_hit_path) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
         // If the root is a leaf, intersect it and return
@@ -77,8 +86,10 @@ private:
         // This traversal loop is eager, because it immediately processes leaves instead of pushing them on the stack.
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
-        Stack stack;
+        std::stack<StackElement> stack;
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
+        std::bitset<64> curr_path;
+        size_t curr_depth = 0;
         while (true) {
             statistics.traversal_steps++;
 
@@ -88,9 +99,11 @@ private:
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
-                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics) &&
-                        primitive_intersector.any_hit)
-                        break;
+                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics)) {
+                        if (primitive_intersector.any_hit) break;
+                        closest_hit_path = curr_path;
+                        closest_hit_path.reset(curr_depth);
+                    }
                     left_child = nullptr;
                 }
             } else
@@ -98,27 +111,40 @@ private:
 
             if (distance_right.first <= distance_right.second) {
                 if (bvh_unlikely(right_child->is_leaf())) {
-                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics) &&
-                        primitive_intersector.any_hit)
-                        break;
+                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics)) {
+                        if (primitive_intersector.any_hit) break;
+                        closest_hit_path = curr_path;
+                        closest_hit_path.set(curr_depth);
+                    }
                     right_child = nullptr;
                 }
             } else
                 right_child = nullptr;
 
             if (left_child) {
+                curr_path.reset(curr_depth);
                 if (right_child) {
-                    if (distance_left.first > distance_right.first)
+                    if (distance_left.first > distance_right.first) {
                         std::swap(left_child, right_child);
-                    stack.push(right_child->first_child_or_primitive);
+                        curr_path.set(curr_depth);
+                    }
+                    stack.push({ right_child->first_child_or_primitive, curr_path, curr_depth + 1 });
                 }
                 left_child = &bvh.nodes[left_child->first_child_or_primitive];
+                curr_depth++;
             } else if (right_child) {
                 left_child = &bvh.nodes[right_child->first_child_or_primitive];
+                curr_path.set(curr_depth);
+                curr_depth++;
             } else {
                 if (stack.empty())
                     break;
-                left_child = &bvh.nodes[stack.pop()];
+                auto stack_top = stack.top();
+                stack.pop();
+                left_child = &bvh.nodes[stack_top.node_index];
+                curr_path = stack_top.path;
+                curr_depth = stack_top.depth;
+                curr_path.flip(curr_depth - 1);
             }
         }
 
@@ -142,7 +168,8 @@ public:
     template <typename PrimitiveIntersector>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
-    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector) const {
+    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector,
+             std::bitset<64> &closest_hit_path) const {
         struct {
             struct Empty {
                 Empty& operator ++ (int)    { return *this; }
@@ -150,7 +177,7 @@ public:
                 Empty& operator += (size_t) { return *this; }
             } traversal_steps, intersections;
         } statistics;
-        return intersect(ray, intersector, statistics);
+        return intersect(ray, intersector, statistics, closest_hit_path);
     }
 
     /// Intersects the BVH with the given ray and intersector.
@@ -158,8 +185,9 @@ public:
     template <typename PrimitiveIntersector>
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
-    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics) const {
-        return intersect(ray, primitive_intersector, statistics);
+    traverse(const Ray<Scalar>& ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
+             std::bitset<64> &closest_hit_path) const {
+        return intersect(ray, primitive_intersector, statistics, closest_hit_path);
     }
 };
 
