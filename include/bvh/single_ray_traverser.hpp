@@ -77,7 +77,7 @@ private:
     std::optional<typename PrimitiveIntersector::Result>
     intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
               bool follow_first_path, std::bitset<64> first_path,
-              std::bitset<64> &closest_hit_path) const {
+              std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
         // If the root is a leaf, intersect it and return
@@ -117,8 +117,10 @@ private:
             stack.push({size_t(other_node - &bvh.nodes[0]), curr_depth, true});
 
             if (curr_node->is_leaf()) {
-                if (intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics))
+                if (intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics)) {
                     closest_hit_path = curr_path;
+                    closest_hit_depth = curr_depth + 1;
+                }
 
                 auto stack_top = stack.top();
                 stack.pop();
@@ -151,6 +153,7 @@ private:
                         if (primitive_intersector.any_hit) break;
                         closest_hit_path = curr_path;
                         closest_hit_path.reset(curr_depth);
+                        closest_hit_depth = curr_depth + 1;
                     }
                     left_child = nullptr;
                 }
@@ -163,6 +166,7 @@ private:
                         if (primitive_intersector.any_hit) break;
                         closest_hit_path = curr_path;
                         closest_hit_path.set(curr_depth);
+                        closest_hit_depth = curr_depth + 1;
                     }
                     right_child = nullptr;
                 }
@@ -220,7 +224,7 @@ public:
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector,
              bool follow_first_path, std::bitset<64> first_path,
-             std::bitset<64> &closest_hit_path) const {
+             std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
         struct {
             struct Empty {
                 Empty& operator ++ (int)    { return *this; }
@@ -228,7 +232,9 @@ public:
                 Empty& operator += (size_t) { return *this; }
             } node_traversed, node_intersections, trig_intersections;
         } statistics;
-        return intersect(ray, intersector, statistics, follow_first_path, first_path, closest_hit_path);
+        return intersect(ray, intersector, statistics,
+                         follow_first_path, first_path,
+                         closest_hit_path, closest_hit_depth);
     }
 
     /// Intersects the BVH with the given ray and intersector.
@@ -238,8 +244,10 @@ public:
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
              bool follow_first_path, std::bitset<64> first_path,
-             std::bitset<64> &closest_hit_path) const {
-        return intersect(ray, primitive_intersector, statistics, follow_first_path, first_path, closest_hit_path);
+             std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
+        return intersect(ray, primitive_intersector, statistics,
+                         follow_first_path, first_path,
+                         closest_hit_path, closest_hit_depth);
     }
 };
 
