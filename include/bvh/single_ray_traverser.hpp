@@ -182,9 +182,11 @@ private:
                     stack.push({right_child->first_child_or_primitive, curr_depth, false});
                 }
                 left_child = &bvh.nodes[left_child->first_child_or_primitive];
+                curr_single = false;
             } else if (right_child) {
                 left_child = &bvh.nodes[right_child->first_child_or_primitive];
                 curr_path.set(curr_depth);
+                curr_single = false;
             } else {
                 if (stack.empty())
                     break;
