@@ -92,51 +92,48 @@ private:
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
         std::stack<StackElement> stack;
-        union {
-            typename Bvh::Node *curr_node;
-            typename Bvh::Node *left_child;
-        };
+        typename Bvh::Node *curr_node;
+        typename Bvh::Node *left_child;
         if (follow_first_path) curr_node = &bvh.nodes[0];
         else left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         std::bitset<64> curr_path;
         size_t curr_depth = 0;
         bool curr_single = false;
 
-        while (true) {
-            if (follow_first_path) {
-                typename Bvh::Node* other_node;
-                if (first_path.test(0)) {
-                    curr_node = &bvh.nodes[curr_node->first_child_or_primitive + 1];
-                    curr_path.set(curr_depth);
-                    other_node = curr_node - 1;
-                } else {
-                    curr_node = &bvh.nodes[curr_node->first_child_or_primitive];
-                    curr_path.reset(curr_depth);
-                    other_node = curr_node + 1;
-                }
-                first_path >>= 1;
+        while (follow_first_path) {
+            typename Bvh::Node* other_node;
+            if (first_path.test(0)) {
+                curr_node = &bvh.nodes[curr_node->first_child_or_primitive + 1];
+                curr_path.set(curr_depth);
+                other_node = curr_node - 1;
+            } else {
+                curr_node = &bvh.nodes[curr_node->first_child_or_primitive];
+                curr_path.reset(curr_depth);
+                other_node = curr_node + 1;
+            }
+            first_path >>= 1;
 
-                statistics.node_traversed++;
-                stack.push({size_t(other_node - &bvh.nodes[0]), curr_depth, true});
+            statistics.node_traversed++;
+            stack.push({size_t(other_node - &bvh.nodes[0]), curr_depth, true});
 
-                if (curr_node->is_leaf()) {
-                    if (intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics))
-                        closest_hit_path = curr_path;
+            if (curr_node->is_leaf()) {
+                if (intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics))
+                    closest_hit_path = curr_path;
 
-                    auto stack_top = stack.top();
-                    stack.pop();
-                    left_child = &bvh.nodes[stack_top.node_index];
-                    curr_depth = stack_top.depth;
-                    curr_single = stack_top.single;
-                    curr_path.flip(curr_depth);
+                auto stack_top = stack.top();
+                stack.pop();
+                left_child = &bvh.nodes[stack_top.node_index];
+                curr_depth = stack_top.depth;
+                curr_single = stack_top.single;
+                curr_path.flip(curr_depth);
 
-                    follow_first_path = false;
-                }
-
-                curr_depth++;
-                continue;
+                follow_first_path = false;
             }
 
+            curr_depth++;
+        }
+
+        while (true) {
             auto* right_child = left_child + 1;
             auto distance_left  = node_intersector.intersect(*left_child,  ray);
             statistics.node_traversed++;
