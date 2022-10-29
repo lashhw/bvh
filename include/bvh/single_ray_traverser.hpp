@@ -94,8 +94,8 @@ private:
         std::stack<StackElement> stack;
         typename Bvh::Node *curr_node;
         typename Bvh::Node *left_child;
-        if (follow_first_path) curr_node = &bvh.nodes[0];
-        else left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
+        curr_node = &bvh.nodes[0];
+        left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         std::bitset<64> curr_path;
         size_t curr_depth = 0;
         bool curr_single = false;
@@ -104,35 +104,26 @@ private:
             typename Bvh::Node* other_node;
             if (first_path.test(0)) {
                 curr_node = &bvh.nodes[curr_node->first_child_or_primitive + 1];
-                curr_path.set(curr_depth);
                 other_node = curr_node - 1;
             } else {
                 curr_node = &bvh.nodes[curr_node->first_child_or_primitive];
-                curr_path.reset(curr_depth);
                 other_node = curr_node + 1;
             }
             first_path >>= 1;
 
             statistics.node_traversed++;
-            stack.push({size_t(other_node - &bvh.nodes[0]), curr_depth, true});
+            stack.push({size_t(other_node - &bvh.nodes[0]), 0, true});
 
             if (curr_node->is_leaf()) {
-                if (intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics)) {
-                    closest_hit_path = curr_path;
-                    closest_hit_depth = curr_depth + 1;
-                }
+                intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics);
 
                 auto stack_top = stack.top();
                 stack.pop();
                 left_child = &bvh.nodes[stack_top.node_index];
-                curr_depth = stack_top.depth;
-                curr_single = stack_top.single;
-                curr_path.flip(curr_depth);
+                curr_single = true;
 
                 follow_first_path = false;
             }
-
-            curr_depth++;
         }
 
         while (true) {
