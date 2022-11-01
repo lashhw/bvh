@@ -76,7 +76,7 @@ private:
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
     intersect(Ray<Scalar> ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
-              bool follow_first_path, std::bitset<64> first_path,
+              size_t max_follow_depth, std::bitset<64> first_path,
               std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
         auto best_hit = std::optional<typename PrimitiveIntersector::Result>(std::nullopt);
 
@@ -88,15 +88,10 @@ private:
 
         NodeIntersector node_intersector(ray);
 
-        // This traversal loop is eager, because it immediately processes leaves instead of pushing them on the stack.
-        // This is generally beneficial for performance because intersections will likely be found which will
-        // allow to cull more subtrees with the ray-box test of the traversal loop.
         std::stack<StackElement> stack;
         auto* curr_node = &bvh.nodes[0];
-        auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
-        bool curr_single = false;
 
-        while (follow_first_path) {
+        for (int i = 0; i < max_follow_depth; i++) {
             typename Bvh::Node* other_node;
             if (first_path.test(0)) {
                 curr_node = &bvh.nodes[curr_node->first_child_or_primitive + 1];
@@ -112,19 +107,29 @@ private:
 
             if (curr_node->is_leaf()) {
                 intersect_leaf(*curr_node, ray, best_hit, primitive_intersector, statistics);
-
-                auto stack_top = stack.top();
-                stack.pop();
-                left_child = &bvh.nodes[stack_top.node_index];
-                curr_single = true;
-
-                follow_first_path = false;
+                break;
             }
+        }
+
+        typename Bvh::Node* left_child;
+        bool curr_single;
+
+        if (curr_node->is_leaf()) {
+            auto stack_top = stack.top();
+            stack.pop();
+            left_child = &bvh.nodes[stack_top.node_index];
+            curr_single = true;
+        } else {
+            left_child = &bvh.nodes[curr_node->first_child_or_primitive];
+            curr_single = false;
         }
 
         std::bitset<64> curr_path;
         size_t curr_depth = 0;
 
+        // This traversal loop is eager, because it immediately processes leaves instead of pushing them on the stack.
+        // This is generally beneficial for performance because intersections will likely be found which will
+        // allow to cull more subtrees with the ray-box test of the traversal loop.
         while (true) {
             auto* right_child = left_child + 1;
             auto distance_left  = node_intersector.intersect(*left_child,  ray);
@@ -213,7 +218,7 @@ public:
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& intersector,
-             bool follow_first_path, std::bitset<64> first_path,
+             size_t max_follow_depth, std::bitset<64> first_path,
              std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
         struct {
             struct Empty {
@@ -223,7 +228,7 @@ public:
             } node_traversed, node_intersections, trig_intersections;
         } statistics;
         return intersect(ray, intersector, statistics,
-                         follow_first_path, first_path,
+                         max_follow_depth, first_path,
                          closest_hit_path, closest_hit_depth);
     }
 
@@ -233,10 +238,10 @@ public:
     bvh_always_inline
     std::optional<typename PrimitiveIntersector::Result>
     traverse(const Ray<Scalar>& ray, PrimitiveIntersector& primitive_intersector, Statistics& statistics,
-             bool follow_first_path, std::bitset<64> first_path,
+             size_t max_follow_depth, std::bitset<64> first_path,
              std::bitset<64> &closest_hit_path, size_t &closest_hit_depth) const {
         return intersect(ray, primitive_intersector, statistics,
-                         follow_first_path, first_path,
+                         max_follow_depth, first_path,
                          closest_hit_path, closest_hit_depth);
     }
 };
