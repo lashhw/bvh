@@ -115,7 +115,6 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
     static mpfr_t direction_d[3];
     static mpfr_t direction_u[3];
     static mpfr_t tmp;
-    static mpfr_t epsilon;
 
     MPNodeIntersector(const Ray<Scalar>& ray)
             : NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>>(ray)
@@ -132,14 +131,6 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
             }
 
             mpfr_init2(tmp, mantissa_width + 1);
-            mpfr_init2(epsilon, mantissa_width + 1);
-
-            assert(mpfr_set_str(tmp, "1", 2, MPFR_RNDN) == 0);
-
-            assert(mpfr_set(epsilon, tmp, MPFR_RNDN) == 0);
-            mpfr_nextabove(epsilon);
-
-            assert(mpfr_sub(epsilon, epsilon, tmp, MPFR_RNDN) == 0);
 
             initialized = true;
         }
@@ -149,16 +140,6 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
             mpfr_set_d(origin_d[i], ray.origin[i], MPFR_RNDD);
             mpfr_set_d(direction_u[i], ray.direction[i], MPFR_RNDU);
             mpfr_set_d(direction_d[i], ray.direction[i], MPFR_RNDD);
-
-            if (!std::signbit(ray.direction[i]))
-                mpfr_abs(tmp, direction_d[i], MPFR_RNDD);
-            else
-                mpfr_abs(tmp, direction_u[i], MPFR_RNDD);
-
-            if (mpfr_cmp(tmp, epsilon) < 0) {
-                assert(mpfr_set(direction_d[i], epsilon, MPFR_RNDN) == 0);
-                assert(mpfr_set(direction_u[i], epsilon, MPFR_RNDN) == 0);
-            }
         }
     }
 
@@ -213,9 +194,6 @@ mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::direction_u[3];
 
 template <typename Bvh, size_t mantissa_width, size_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::tmp;
-
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
-mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::epsilon;
 
 } // namespace bvh
 
