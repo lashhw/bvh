@@ -112,8 +112,10 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
 
     mutable mpfr_t tmp;
 
-    mpfr_t inverse_direction[3];
-    mpfr_t scaled_origin[3];
+    mpfr_t origin_u[3];
+    mpfr_t origin_d[3];
+    mpfr_t direction_u[3];
+    mpfr_t direction_d[3];
 
     MPNodeIntersector(const Ray<Scalar>& ray)
             : NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>>(ray)
@@ -137,35 +139,56 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
         mpfr_sub(epsilon, next, one, MPFR_RNDN);
 
         for (int i = 0; i < 3; i++) {
-            mpfr_t neg_ray_origin;
-            mpfr_init2(neg_ray_origin, mantissa_width);
-            mpfr_set_d(neg_ray_origin, -ray.origin[i], MPFR_RNDN);
+            mpfr_init2(origin_u[i], mantissa_width);
+            mpfr_set_d(origin_u[i], ray.origin[i], MPFR_RNDU);
 
-            mpfr_t ray_direction;
-            mpfr_init2(ray_direction, mantissa_width);
-            mpfr_set_d(ray_direction, ray.direction[i], MPFR_RNDN);
+            mpfr_init2(origin_d[i], mantissa_width);
+            mpfr_set_d(origin_d[i], ray.origin[i], MPFR_RNDD);
+
+            mpfr_init2(direction_u[i], mantissa_width);
+            mpfr_set_d(direction_u[i], ray.direction[i], MPFR_RNDU);
+
+            mpfr_init2(direction_d[i], mantissa_width);
+            mpfr_set_d(direction_d[i], ray.direction[i], MPFR_RNDD);
 
             mpfr_t abs_ray_direction;
             mpfr_init2(abs_ray_direction, mantissa_width);
-            mpfr_abs(abs_ray_direction, ray_direction, MPFR_RNDN);
+            if (!std::signbit(ray.direction[i]))
+                mpfr_abs(abs_ray_direction, direction_d[i], MPFR_RNDD);
+            else
+                mpfr_abs(abs_ray_direction, direction_u[i], MPFR_RNDD);
 
-            if (mpfr_cmp(abs_ray_direction, epsilon) < 0)
-                mpfr_set(ray_direction, epsilon, MPFR_RNDN);
-
-            mpfr_init2(inverse_direction[i], mantissa_width);
-            mpfr_div(inverse_direction[i], one, ray_direction, MPFR_RNDN);
-
-            mpfr_init2(scaled_origin[i], mantissa_width);
-            mpfr_mul(scaled_origin[i], neg_ray_origin, inverse_direction[i], MPFR_RNDN);
+            if (mpfr_cmp(abs_ray_direction, epsilon) < 0) {
+                mpfr_set(direction_u[i], epsilon, MPFR_RNDN);
+                mpfr_set(direction_d[i], epsilon, MPFR_RNDN);
+            }
         }
     }
 
     template <bool IsMin>
     bvh_always_inline
-    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>&) const {
-        mpfr_set_d(tmp, p, IsMin ? MPFR_RNDD : MPFR_RNDU);
-        mpfr_mul(tmp, tmp, inverse_direction[axis], MPFR_RNDN);
-        mpfr_add(tmp, tmp, scaled_origin[axis], MPFR_RNDN);
+    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray) const {
+        if (!std::signbit(ray.direction[axis])) {
+            if (IsMin) {
+                mpfr_set_d(tmp, p, MPFR_RNDD);
+                mpfr_sub(tmp, tmp, origin_u[axis], MPFR_RNDD);
+                mpfr_div(tmp, tmp, direction_u[axis], MPFR_RNDD);
+            } else {
+                mpfr_set_d(tmp, p, MPFR_RNDU);
+                mpfr_sub(tmp, tmp, origin_d[axis], MPFR_RNDU);
+                mpfr_div(tmp, tmp, direction_d[axis], MPFR_RNDU);
+            }
+        } else {
+            if (IsMin) {
+                mpfr_set_d(tmp, p, MPFR_RNDU);
+                mpfr_sub(tmp, tmp, origin_d[axis], MPFR_RNDU);
+                mpfr_div(tmp, tmp, direction_d[axis], MPFR_RNDD);
+            } else {
+                mpfr_set_d(tmp, p, MPFR_RNDD);
+                mpfr_sub(tmp, tmp, origin_u[axis], MPFR_RNDD);
+                mpfr_div(tmp, tmp, direction_u[axis], MPFR_RNDU);
+            }
+        }
         return mpfr_get_d(tmp, MPFR_RNDN);
     }
 };
