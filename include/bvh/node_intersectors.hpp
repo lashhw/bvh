@@ -125,14 +125,14 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
             exponent_min = -exponent_max + 2;
 
             for (int i = 0; i < 3; i++) {
-                mpfr_init2(origin_d[i], mantissa_width);
-                mpfr_init2(origin_u[i], mantissa_width);
-                mpfr_init2(direction_d[i], mantissa_width);
-                mpfr_init2(direction_u[i], mantissa_width);
+                mpfr_init2(origin_d[i], mantissa_width + 1);
+                mpfr_init2(origin_u[i], mantissa_width + 1);
+                mpfr_init2(direction_d[i], mantissa_width + 1);
+                mpfr_init2(direction_u[i], mantissa_width + 1);
             }
 
-            mpfr_init2(tmp, mantissa_width);
-            mpfr_init2(epsilon, mantissa_width);
+            mpfr_init2(tmp, mantissa_width + 1);
+            mpfr_init2(epsilon, mantissa_width + 1);
 
             assert(mpfr_set_str(tmp, "1", 2, MPFR_RNDN) == 0);
 
