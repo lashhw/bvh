@@ -107,60 +107,57 @@ template <typename Bvh, size_t mantissa_width, size_t exponent_width>
 struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>> {
     using Scalar = typename Bvh::ScalarType;
 
-    mp_exp_t exponent_min;
-    mp_exp_t exponent_max;
-
-    mutable mpfr_t tmp;
-
-    mpfr_t origin_u[3];
-    mpfr_t origin_d[3];
-    mpfr_t direction_u[3];
-    mpfr_t direction_d[3];
+    static bool initialized;
+    static mp_exp_t exponent_min;
+    static mp_exp_t exponent_max;
+    static mpfr_t origin_d[3];
+    static mpfr_t origin_u[3];
+    static mpfr_t direction_d[3];
+    static mpfr_t direction_u[3];
+    static mpfr_t tmp;
+    static mpfr_t epsilon;
 
     MPNodeIntersector(const Ray<Scalar>& ray)
             : NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>>(ray)
     {
-        exponent_max = (1 << (exponent_width - 1));
-        exponent_min = -exponent_max + 2;
+        if (!initialized) {
+            exponent_max = (1 << (exponent_width - 1));
+            exponent_min = -exponent_max + 2;
 
-        mpfr_init2(tmp, mantissa_width);
+            for (int i = 0; i < 3; i++) {
+                mpfr_init2(origin_d[i], mantissa_width);
+                mpfr_init2(origin_u[i], mantissa_width);
+                mpfr_init2(direction_d[i], mantissa_width);
+                mpfr_init2(direction_u[i], mantissa_width);
+            }
 
-        mpfr_t one;
-        mpfr_init2(one, mantissa_width);
-        mpfr_set_str(one, "1", 2, MPFR_RNDN);
+            mpfr_init2(tmp, mantissa_width);
+            mpfr_init2(epsilon, mantissa_width);
 
-        mpfr_t next;
-        mpfr_init2(next, mantissa_width);
-        mpfr_set(next, one, MPFR_RNDN);
-        mpfr_nextabove(next);
+            assert(mpfr_set_str(tmp, "1", 2, MPFR_RNDN) == 0);
 
-        mpfr_t epsilon;
-        mpfr_init2(epsilon, mantissa_width);
-        mpfr_sub(epsilon, next, one, MPFR_RNDN);
+            assert(mpfr_set(epsilon, tmp, MPFR_RNDN) == 0);
+            mpfr_nextabove(epsilon);
+
+            assert(mpfr_sub(epsilon, epsilon, tmp, MPFR_RNDN) == 0);
+
+            initialized = true;
+        }
 
         for (int i = 0; i < 3; i++) {
-            mpfr_init2(origin_u[i], mantissa_width);
             mpfr_set_d(origin_u[i], ray.origin[i], MPFR_RNDU);
-
-            mpfr_init2(origin_d[i], mantissa_width);
             mpfr_set_d(origin_d[i], ray.origin[i], MPFR_RNDD);
-
-            mpfr_init2(direction_u[i], mantissa_width);
             mpfr_set_d(direction_u[i], ray.direction[i], MPFR_RNDU);
-
-            mpfr_init2(direction_d[i], mantissa_width);
             mpfr_set_d(direction_d[i], ray.direction[i], MPFR_RNDD);
 
-            mpfr_t abs_ray_direction;
-            mpfr_init2(abs_ray_direction, mantissa_width);
             if (!std::signbit(ray.direction[i]))
-                mpfr_abs(abs_ray_direction, direction_d[i], MPFR_RNDD);
+                mpfr_abs(tmp, direction_d[i], MPFR_RNDD);
             else
-                mpfr_abs(abs_ray_direction, direction_u[i], MPFR_RNDD);
+                mpfr_abs(tmp, direction_u[i], MPFR_RNDD);
 
-            if (mpfr_cmp(abs_ray_direction, epsilon) < 0) {
-                mpfr_set(direction_u[i], epsilon, MPFR_RNDN);
-                mpfr_set(direction_d[i], epsilon, MPFR_RNDN);
+            if (mpfr_cmp(tmp, epsilon) < 0) {
+                assert(mpfr_set(direction_d[i], epsilon, MPFR_RNDN) == 0);
+                assert(mpfr_set(direction_u[i], epsilon, MPFR_RNDN) == 0);
             }
         }
     }
@@ -192,6 +189,33 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
         return mpfr_get_d(tmp, MPFR_RNDN);
     }
 };
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+bool MPNodeIntersector<Bvh, mantissa_width, exponent_width>::initialized = false;
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mp_exp_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::exponent_min;
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mp_exp_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::exponent_max;
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::origin_d[3];
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::origin_u[3];
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::direction_d[3];
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::direction_u[3];
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::tmp;
+
+template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::epsilon;
 
 } // namespace bvh
 
