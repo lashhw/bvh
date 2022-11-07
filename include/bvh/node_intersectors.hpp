@@ -107,22 +107,27 @@ template <typename Bvh, size_t mantissa_width, size_t exponent_width>
 struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>> {
     using Scalar = typename Bvh::ScalarType;
 
+    static constexpr mp_exp_t exponent_min = -(1 << (exponent_width - 1)) + 2;
+    static constexpr mp_exp_t exponent_max = (1 << (exponent_width - 1));
+
     static bool initialized;
-    static mp_exp_t exponent_min;
-    static mp_exp_t exponent_max;
     static mpfr_t origin_d[3];
     static mpfr_t origin_u[3];
     static mpfr_t direction_d[3];
     static mpfr_t direction_u[3];
     static mpfr_t tmp;
 
+    void check_exponent_and_set_inf(mpfr_t &num) const {
+        if (mpfr_number_p(num)) {
+            if (mpfr_get_exp(num) < exponent_min) mpfr_set_zero(num, mpfr_signbit(num) ? -1 : 1);
+            else if (mpfr_get_exp(num) > exponent_max) mpfr_set_inf(num, mpfr_signbit(num) ? -1 : 1);
+        }
+    }
+
     MPNodeIntersector(const Ray<Scalar>& ray)
             : NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>>(ray)
     {
         if (!initialized) {
-            exponent_max = (1 << (exponent_width - 1));
-            exponent_min = -exponent_max + 2;
-
             for (int i = 0; i < 3; i++) {
                 mpfr_init2(origin_d[i], mantissa_width + 1);
                 mpfr_init2(origin_u[i], mantissa_width + 1);
@@ -136,10 +141,14 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
         }
 
         for (int i = 0; i < 3; i++) {
-            mpfr_set_d(origin_u[i], ray.origin[i], MPFR_RNDU);
             mpfr_set_d(origin_d[i], ray.origin[i], MPFR_RNDD);
-            mpfr_set_d(direction_u[i], ray.direction[i], MPFR_RNDU);
+            mpfr_set_d(origin_u[i], ray.origin[i], MPFR_RNDU);
             mpfr_set_d(direction_d[i], ray.direction[i], MPFR_RNDD);
+            mpfr_set_d(direction_u[i], ray.direction[i], MPFR_RNDU);
+            check_exponent_and_set_inf(origin_d[i]);
+            check_exponent_and_set_inf(origin_u[i]);
+            check_exponent_and_set_inf(direction_d[i]);
+            check_exponent_and_set_inf(direction_u[i]);
         }
     }
 
@@ -149,22 +158,34 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
         if (!std::signbit(ray.direction[axis])) {
             if (IsMin) {
                 mpfr_set_d(tmp, p, MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
                 mpfr_sub(tmp, tmp, origin_u[axis], MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
                 mpfr_div(tmp, tmp, direction_u[axis], MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
             } else {
                 mpfr_set_d(tmp, p, MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
                 mpfr_sub(tmp, tmp, origin_d[axis], MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
                 mpfr_div(tmp, tmp, direction_d[axis], MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
             }
         } else {
             if (IsMin) {
                 mpfr_set_d(tmp, p, MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
                 mpfr_sub(tmp, tmp, origin_d[axis], MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
                 mpfr_div(tmp, tmp, direction_d[axis], MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
             } else {
                 mpfr_set_d(tmp, p, MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
                 mpfr_sub(tmp, tmp, origin_u[axis], MPFR_RNDD);
+                check_exponent_and_set_inf(tmp);
                 mpfr_div(tmp, tmp, direction_u[axis], MPFR_RNDU);
+                check_exponent_and_set_inf(tmp);
             }
         }
         return mpfr_get_d(tmp, MPFR_RNDN);
@@ -173,12 +194,6 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
 
 template <typename Bvh, size_t mantissa_width, size_t exponent_width>
 bool MPNodeIntersector<Bvh, mantissa_width, exponent_width>::initialized = false;
-
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
-mp_exp_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::exponent_min;
-
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
-mp_exp_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::exponent_max;
 
 template <typename Bvh, size_t mantissa_width, size_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::origin_d[3];
