@@ -77,20 +77,22 @@ private:
         // This traversal loop is eager, because it immediately processes leaves instead of pushing them on the stack.
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
+        bool high_precision = true;
         Stack stack;
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         while (true) {
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-            auto distance_left  = node_intersector.intersect(*left_child,  ray);
-            auto distance_right = node_intersector.intersect(*right_child, ray);
+            auto distance_left  = node_intersector.intersect(*left_child,  ray, high_precision);
+            auto distance_right = node_intersector.intersect(*right_child, ray, high_precision);
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
-                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics) &&
-                        primitive_intersector.any_hit)
-                        break;
+                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics)) {
+                        high_precision = false;
+                        if (primitive_intersector.any_hit) break;
+                    }
                     left_child = nullptr;
                 }
             } else
@@ -98,9 +100,10 @@ private:
 
             if (distance_right.first <= distance_right.second) {
                 if (bvh_unlikely(right_child->is_leaf())) {
-                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics) &&
-                        primitive_intersector.any_hit)
-                        break;
+                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics)) {
+                        high_precision = false;
+                        if (primitive_intersector.any_hit) break;
+                    }
                     right_child = nullptr;
                 }
             } else

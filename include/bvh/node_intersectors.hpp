@@ -27,19 +27,19 @@ struct NodeIntersector {
 
     template <bool IsMin>
     bvh_always_inline
-    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray) const {
-        return static_cast<const Derived*>(this)->template intersect_axis<IsMin>(axis, p, ray);
+    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray, bool high_precision) const {
+        return static_cast<const Derived*>(this)->template intersect_axis<IsMin>(axis, p, ray, high_precision);
     }
 
     bvh_always_inline
-    std::pair<Scalar, Scalar> intersect(const typename Bvh::Node& node, const Ray<Scalar>& ray) const {
+    std::pair<Scalar, Scalar> intersect(const typename Bvh::Node& node, const Ray<Scalar>& ray, bool high_precision) const {
         Vector3<Scalar> entry, exit;
-        entry[0] = intersect_axis<true >(0, node.bounds[0 * 2 +     octant[0]], ray);
-        entry[1] = intersect_axis<true >(1, node.bounds[1 * 2 +     octant[1]], ray);
-        entry[2] = intersect_axis<true >(2, node.bounds[2 * 2 +     octant[2]], ray);
-        exit [0] = intersect_axis<false>(0, node.bounds[0 * 2 + 1 - octant[0]], ray);
-        exit [1] = intersect_axis<false>(1, node.bounds[1 * 2 + 1 - octant[1]], ray);
-        exit [2] = intersect_axis<false>(2, node.bounds[2 * 2 + 1 - octant[2]], ray);
+        entry[0] = intersect_axis<true >(0, node.bounds[0 * 2 +     octant[0]], ray, high_precision);
+        entry[1] = intersect_axis<true >(1, node.bounds[1 * 2 +     octant[1]], ray, high_precision);
+        entry[2] = intersect_axis<true >(2, node.bounds[2 * 2 +     octant[2]], ray, high_precision);
+        exit [0] = intersect_axis<false>(0, node.bounds[0 * 2 + 1 - octant[0]], ray, high_precision);
+        exit [1] = intersect_axis<false>(1, node.bounds[1 * 2 + 1 - octant[1]], ray, high_precision);
+        exit [2] = intersect_axis<false>(2, node.bounds[2 * 2 + 1 - octant[2]], ray, high_precision);
         // Note: This order for the min/max operations is guaranteed not to produce NaNs
         return std::make_pair(
             robust_max(entry[0], robust_max(entry[1], robust_max(entry[2], ray.tmin))),
@@ -71,7 +71,7 @@ struct RobustNodeIntersector : public NodeIntersector<Bvh, RobustNodeIntersector
 
     template <bool IsMin>
     bvh_always_inline
-    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray) const {
+    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray, bool) const {
         return (p - ray.origin[axis]) * (IsMin ? inverse_direction[axis] : padded_inverse_direction[axis]);
     }
 
@@ -95,7 +95,7 @@ struct FastNodeIntersector : public NodeIntersector<Bvh, FastNodeIntersector<Bvh
 
     template <bool>
     bvh_always_inline
-    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>&) const {
+    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>&, bool) const {
         return fast_multiply_add(p, inverse_direction[axis], scaled_origin[axis]);
     }
 
@@ -116,6 +116,9 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
     static mpfr_t direction_d[3];
     static mpfr_t direction_u[3];
     static mpfr_t tmp;
+
+    Vector3<Scalar> scaled_origin;
+    Vector3<Scalar> inverse_direction;
 
     void check_exponent_and_set_inf(mpfr_t &num) const {
         if (mpfr_number_p(num)) {
@@ -140,6 +143,9 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
             initialized = true;
         }
 
+        inverse_direction = ray.direction.safe_inverse();
+        scaled_origin     = -ray.origin * inverse_direction;
+
         for (int i = 0; i < 3; i++) {
             mpfr_set_d(origin_d[i], ray.origin[i], MPFR_RNDD);
             mpfr_set_d(origin_u[i], ray.origin[i], MPFR_RNDU);
@@ -154,7 +160,10 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
 
     template <bool IsMin>
     bvh_always_inline
-    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray) const {
+    Scalar intersect_axis(int axis, Scalar p, const Ray<Scalar>& ray, bool high_precision) const {
+        if (high_precision) {
+            return fast_multiply_add(p, inverse_direction[axis], scaled_origin[axis]);
+        }
         if (!std::signbit(ray.direction[axis])) {
             if (IsMin) {
                 mpfr_set_d(tmp, p, MPFR_RNDD);
