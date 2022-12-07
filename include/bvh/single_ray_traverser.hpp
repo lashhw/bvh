@@ -2,6 +2,7 @@
 #define BVH_SINGLE_RAY_TRAVERSAL_HPP
 
 #include <cassert>
+#include <mpfr.h>
 
 #include "bvh/bvh.hpp"
 #include "bvh/ray.hpp"
@@ -83,6 +84,9 @@ private:
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
+            statistics.traversed.insert(left_child - &bvh.nodes[0]);
+            statistics.traversed.insert(right_child - &bvh.nodes[0]);
+
             auto distance_left  = node_intersector.intersect(*left_child,  ray);
             auto distance_right = node_intersector.intersect(*right_child, ray);
 
@@ -132,6 +136,7 @@ public:
     struct Statistics {
         size_t traversal_steps = 0;
         size_t intersections   = 0;
+        std::unordered_set<size_t> traversed;
     };
 
     SingleRayTraverser(const Bvh& bvh)
