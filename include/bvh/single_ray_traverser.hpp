@@ -2,6 +2,7 @@
 #define BVH_SINGLE_RAY_TRAVERSAL_HPP
 
 #include <cassert>
+#include <unordered_set>
 
 #include "bvh/bvh.hpp"
 #include "bvh/ray.hpp"
@@ -77,25 +78,29 @@ private:
         // This traversal loop is eager, because it immediately processes leaves instead of pushing them on the stack.
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
-        bool high_precision = true;
         Stack stack;
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         while (true) {
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-            auto distance_left  = node_intersector.intersect(*left_child,  ray, high_precision);
-            auto distance_right = node_intersector.intersect(*right_child, ray, high_precision);
+            statistics.traversed.insert(left_child - &bvh.nodes[0]);
+            statistics.traversed.insert(right_child - &bvh.nodes[0]);
 
-            if (high_precision) statistics.high_precision_count++;
+            auto distance_left  = node_intersector.intersect(*left_child,  ray, left_child->high_precision);
+            auto distance_right = node_intersector.intersect(*right_child, ray, right_child->high_precision);
+
+            if (left_child->high_precision) statistics.high_precision_count++;
+            else statistics.low_precision_count++;
+
+            if (right_child->high_precision) statistics.high_precision_count++;
             else statistics.low_precision_count++;
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
-                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics)) {
-                        high_precision = false;
-                        if (primitive_intersector.any_hit) break;
-                    }
+                    if (intersect_leaf(*left_child, ray, best_hit, primitive_intersector, statistics) &&
+                        primitive_intersector.any_hit)
+                        break;
                     left_child = nullptr;
                 }
             } else
@@ -103,10 +108,9 @@ private:
 
             if (distance_right.first <= distance_right.second) {
                 if (bvh_unlikely(right_child->is_leaf())) {
-                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics)) {
-                        high_precision = false;
-                        if (primitive_intersector.any_hit) break;
-                    }
+                    if (intersect_leaf(*right_child, ray, best_hit, primitive_intersector, statistics) &&
+                        primitive_intersector.any_hit)
+                        break;
                     right_child = nullptr;
                 }
             } else
@@ -140,6 +144,7 @@ public:
         size_t intersections   = 0;
         size_t high_precision_count = 0;
         size_t low_precision_count = 0;
+        std::unordered_set<size_t> traversed;
     };
 
     SingleRayTraverser(const Bvh& bvh)
