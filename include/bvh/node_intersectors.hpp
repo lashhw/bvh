@@ -103,12 +103,12 @@ struct FastNodeIntersector : public NodeIntersector<Bvh, FastNodeIntersector<Bvh
 };
 
 /// Multiprecision intersection algorithm.
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, mantissa_width, exponent_width>> {
     using Scalar = typename Bvh::ScalarType;
 
-    static constexpr mp_exp_t exponent_min = -(1 << (exponent_width - 1)) + 2;
-    static constexpr mp_exp_t exponent_max = (1 << (exponent_width - 1));
+    static constexpr mpfr_exp_t exponent_min = -(1 << (exponent_width - 1)) + 2;
+    static constexpr mpfr_exp_t exponent_max = (1 << (exponent_width - 1));
 
     static bool initialized;
     static mpfr_t origin_d[3];
@@ -201,22 +201,22 @@ struct MPNodeIntersector : public NodeIntersector<Bvh, MPNodeIntersector<Bvh, ma
     }
 };
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 bool MPNodeIntersector<Bvh, mantissa_width, exponent_width>::initialized = false;
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::origin_d[3];
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::origin_u[3];
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::direction_d[3];
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::direction_u[3];
 
-template <typename Bvh, size_t mantissa_width, size_t exponent_width>
+template <typename Bvh, mpfr_prec_t mantissa_width, mpfr_exp_t exponent_width>
 mpfr_t MPNodeIntersector<Bvh, mantissa_width, exponent_width>::tmp;
 
 } // namespace bvh
