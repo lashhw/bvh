@@ -84,8 +84,8 @@ private:
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-            statistics.traversed.insert(left_child - &bvh.nodes[0]);
-            statistics.traversed.insert(right_child - &bvh.nodes[0]);
+            statistics.traversed.push_back(left_child - &bvh.nodes[0]);
+            statistics.traversed.push_back(right_child - &bvh.nodes[0]);
 
             auto distance_left  = node_intersector.intersect(*left_child,  ray, left_child->high_precision);
             auto distance_right = node_intersector.intersect(*right_child, ray, right_child->high_precision);
@@ -144,7 +144,7 @@ public:
         size_t intersections   = 0;
         size_t high_precision_count = 0;
         size_t low_precision_count = 0;
-        std::unordered_set<size_t> traversed;
+        std::vector<size_t> traversed;
     };
 
     SingleRayTraverser(const Bvh& bvh)
