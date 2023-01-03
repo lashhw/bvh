@@ -81,7 +81,7 @@ public:
 
         bvh.node_count = 1;
         bvh.nodes[0].bounding_box_proxy() = global_bbox;
-        bvh.nodes[0].high_precision = true;
+        bvh.nodes[0].high_precision = false;
 
         #pragma omp parallel
         {
