@@ -195,6 +195,7 @@ public:
         auto split_index = best_splits[best_axis].second;
 
         // Make sure the cost of splitting does not exceed the cost of not splitting
+        /*
         auto max_split_cost = node.bounding_box_proxy().half_area() *
             (static_cast<Scalar>(item.work_size()) - builder.traversal_cost);
         if (best_splits[best_axis].first >= max_split_cost) {
@@ -207,6 +208,7 @@ public:
                 return std::nullopt;
             }
         }
+         */
 
         unsigned other_axis[2] = { (best_axis + 1) % 3, (best_axis + 2) % 3 };
 
