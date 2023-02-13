@@ -26,6 +26,7 @@ struct Bvh {
         Scalar bounds[6];
         IndexType primitive_count;
         IndexType first_child_or_primitive;
+        bool low_precision;
 
         bool is_leaf() const { return primitive_count != 0; }
 
