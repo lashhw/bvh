@@ -83,8 +83,8 @@ private:
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-            auto distance_left  = node_intersector.intersect(*left_child,  ray);
-            auto distance_right = node_intersector.intersect(*right_child, ray);
+            auto distance_left  = node_intersector.intersect(*left_child,  ray, left_child->low_precision);
+            auto distance_right = node_intersector.intersect(*right_child, ray, right_child->low_precision);
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
