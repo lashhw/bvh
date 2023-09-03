@@ -50,7 +50,7 @@ private:
         assert(node.is_leaf());
         size_t begin = node.first_child_or_primitive;
         size_t end   = begin + node.primitive_count;
-        statistics.intersections += end - begin;
+        statistics.intersections_a += end - begin;
         for (size_t i = begin; i < end; ++i) {
             if (auto hit = primitive_intersector.intersect(i, ray)) {
                 best_hit = hit;
@@ -108,6 +108,7 @@ private:
 
             if (left_child) {
                 if (right_child) {
+                    statistics.both_intersected++;
                     if (distance_left.first > distance_right.first)
                         std::swap(left_child, right_child);
                     stack.push(right_child->first_child_or_primitive);
@@ -122,6 +123,8 @@ private:
             }
         }
 
+        if (best_hit.has_value())
+            statistics.finalize++;
         return best_hit;
     }
 
@@ -131,7 +134,9 @@ public:
     /// Statistics collected during traversal.
     struct Statistics {
         size_t traversal_steps = 0;
-        size_t intersections   = 0;
+        size_t both_intersected = 0;
+        size_t intersections_a = 0;
+        size_t finalize = 0;
     };
 
     SingleRayTraverser(const Bvh& bvh)
@@ -148,7 +153,7 @@ public:
                 Empty& operator ++ (int)    { return *this; }
                 Empty& operator ++ ()       { return *this; }
                 Empty& operator += (size_t) { return *this; }
-            } traversal_steps, intersections;
+            } traversal_steps, both_intersected, intersections_a, finalize;
         } statistics;
         return intersect(ray, intersector, statistics);
     }

@@ -10,6 +10,7 @@
 #include "bvh/ray.hpp"
 
 namespace bvh {
+size_t intersections_b = 0;
 
 /// Triangle primitive, defined by three points, and using the Moeller-Trumbore test.
 /// By default, the normal is left-handed, which minimizes the number of operations in
@@ -112,6 +113,7 @@ struct Triangle {
         static constexpr auto tolerance =
             NonZeroTolerance ? -std::numeric_limits<Scalar>::epsilon() : Scalar(0);
         if (u >= tolerance && v >= tolerance && w >= tolerance) {
+            intersections_b++;
             auto t = negate_when_right_handed(dot(n, c)) * inv_det;
             if (t >= ray.tmin && t <= ray.tmax) {
                 if constexpr (NonZeroTolerance) {
