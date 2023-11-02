@@ -50,9 +50,8 @@ private:
         assert(node.is_leaf());
         size_t begin = node.first_child_or_primitive;
         size_t end   = begin + node.primitive_count;
-        statistics.intersections_a += end - begin;
         for (size_t i = begin; i < end; ++i) {
-            if (auto hit = primitive_intersector.intersect(i, ray)) {
+            if (auto hit = primitive_intersector.intersect(i, ray, statistics)) {
                 best_hit = hit;
                 if (primitive_intersector.any_hit)
                     return best_hit;
@@ -136,6 +135,7 @@ public:
         size_t traversal_steps = 0;
         size_t both_intersected = 0;
         size_t intersections_a = 0;
+        size_t intersections_b = 0;
         size_t finalize = 0;
     };
 
@@ -153,7 +153,7 @@ public:
                 Empty& operator ++ (int)    { return *this; }
                 Empty& operator ++ ()       { return *this; }
                 Empty& operator += (size_t) { return *this; }
-            } traversal_steps, both_intersected, intersections_a, finalize;
+            } traversal_steps, both_intersected, intersections_a, intersections_b, finalize;
         } statistics;
         return intersect(ray, intersector, statistics);
     }

@@ -45,9 +45,10 @@ struct ClosestPrimitiveIntersector : public PrimitiveIntersector<Bvh, Primitive,
         : PrimitiveIntersector<Bvh, Primitive, Permuted, false>(bvh, primitives)
     {}
 
-    std::optional<Result> intersect(size_t index, const Ray<Scalar>& ray) const {
+    template <typename Statistics>
+    std::optional<Result> intersect(size_t index, const Ray<Scalar>& ray, Statistics &statistics) const {
         auto [p, i] = this->primitive_at(index);
-        if (auto hit = p.intersect(ray))
+        if (auto hit = p.intersect(ray, statistics))
             return std::make_optional(Result { i, *hit });
         return std::nullopt;
     }
