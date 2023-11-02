@@ -98,7 +98,7 @@ struct Triangle {
 
     template <typename Statistics>
     std::optional<Intersection> intersect(const Ray<Scalar>& ray, Statistics &statistics) const {
-        statistics.intersections_a += 1;
+        statistics.intersections_a++;
         auto negate_when_right_handed = [] (Scalar x) { return LeftHandedNormal ? x : -x; };
 
         auto c = p0 - ray.origin;
@@ -114,7 +114,7 @@ struct Triangle {
         static constexpr auto tolerance =
             NonZeroTolerance ? -std::numeric_limits<Scalar>::epsilon() : Scalar(0);
         if (u >= tolerance && v >= tolerance && w >= tolerance) {
-            statistics.intersections_b += 1;
+            statistics.intersections_b++;
             auto t = negate_when_right_handed(dot(n, c)) * inv_det;
             if (t >= ray.tmin && t <= ray.tmax) {
                 if constexpr (NonZeroTolerance) {
