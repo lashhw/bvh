@@ -20,7 +20,7 @@ private:
     using Scalar = typename Bvh::ScalarType;
 
     struct Stack {
-        using Element = std::pair<typename Bvh::IndexType, std::array<float, 6>>;
+        using Element = std::tuple<typename Bvh::IndexType, std::array<float, 3>, std::array<float, 3>>;
 
         Element elements[stack_size];
         size_t size = 0;
@@ -77,31 +77,21 @@ private:
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
         Stack stack;
-        std::array<float, 6> curr_bounds = {
+        std::array<float, 3> curr_min_bounds = {
             bvh.nodes[0].bounds[0],
-            bvh.nodes[0].bounds[1],
             bvh.nodes[0].bounds[2],
-            bvh.nodes[0].bounds[3],
             bvh.nodes[0].bounds[4],
-            bvh.nodes[0].bounds[5]
+        };
+        std::array<float, 3> curr_exp = {
+            bvh.nodes[0].exp[0],
+            bvh.nodes[0].exp[1],
+            bvh.nodes[0].exp[2]
         };
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         while (true) {
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-
-            float extent[3] = {
-                curr_bounds[1] - curr_bounds[0],
-                curr_bounds[3] - curr_bounds[2],
-                curr_bounds[5] - curr_bounds[4]
-            };
-
-            float exp[3] = {
-                std::powf(2, std::ceil(std::log2((extent[0] == 0.0f ? 1.0f : extent[0]) / 255.0f))),
-                std::powf(2, std::ceil(std::log2((extent[1] == 0.0f ? 1.0f : extent[1]) / 255.0f))),
-                std::powf(2, std::ceil(std::log2((extent[2] == 0.0f ? 1.0f : extent[2]) / 255.0f)))
-            };
 
             std::array<float, 6> left_bounds = {};
             std::array<float, 6> right_bounds = {};
@@ -112,10 +102,32 @@ private:
 
             for (auto &[child, bounds] : child_bounds_pair) {
                 for (int i = 0; i < 3; i++) {
-                    bounds[i * 2] = curr_bounds[i * 2] + child->bounds_quant[i * 2] * exp[i];
-                    bounds[i * 2 + 1] = curr_bounds[i * 2] + child->bounds_quant[i * 2 + 1] * exp[i];
+                    bounds[i * 2] = curr_min_bounds[i] + child->bounds_quant[i * 2] * curr_exp[i];
+                    bounds[i * 2 + 1] = curr_min_bounds[i] + child->bounds_quant[i * 2 + 1] * curr_exp[i];
                 }
             }
+
+            std::array<float, 3> left_min_bounds = {
+                left_bounds[0],
+                left_bounds[2],
+                left_bounds[4]
+            };
+            std::array<float, 3> right_min_bounds = {
+                right_bounds[0],
+                right_bounds[2],
+                right_bounds[4]
+            };
+
+            std::array<float, 3> left_exp = {
+                left_child->exp[0],
+                left_child->exp[1],
+                left_child->exp[2]
+            };
+            std::array<float, 3> right_exp = {
+                right_child->exp[0],
+                right_child->exp[1],
+                right_child->exp[2]
+            };
 
             auto distance_left  = node_intersector.intersect(left_bounds.data(),  ray);
             auto distance_right = node_intersector.intersect(right_bounds.data(), ray);
@@ -145,21 +157,25 @@ private:
                     statistics.both_intersected++;
                     if (distance_left.first > distance_right.first) {
                         std::swap(left_child, right_child);
-                        std::swap(left_bounds, right_bounds);
+                        std::swap(left_min_bounds, right_min_bounds);
+                        std::swap(left_exp, right_exp);
                     }
-                    stack.push({right_child->first_child_or_primitive, right_bounds});
+                    stack.push({right_child->first_child_or_primitive, right_min_bounds, right_exp});
                 }
                 left_child = &bvh.nodes[left_child->first_child_or_primitive];
-                curr_bounds = left_bounds;
+                curr_min_bounds = left_min_bounds;
+                curr_exp = left_exp;
             } else if (right_child) {
                 left_child = &bvh.nodes[right_child->first_child_or_primitive];
-                curr_bounds = right_bounds;
+                curr_min_bounds = right_min_bounds;
+                curr_exp = right_exp;
             } else {
                 if (stack.empty())
                     break;
-                auto tmp = stack.pop();
-                left_child = &bvh.nodes[tmp.first];
-                curr_bounds = tmp.second;
+                auto [t1, t2, t3] = stack.pop();
+                left_child = &bvh.nodes[t1];
+                curr_min_bounds = t2;
+                curr_exp = t3;
             }
         }
 

@@ -25,6 +25,7 @@ struct Bvh {
     struct Node {
         Scalar bounds[6];
         uint8_t bounds_quant[6];
+        float exp[3];
         IndexType primitive_count;
         IndexType first_child_or_primitive;
 
