@@ -1,5 +1,5 @@
-#ifndef BVH_SINGLE_RAY_TRAVERSAL_HPP
-#define BVH_SINGLE_RAY_TRAVERSAL_HPP
+#ifndef BVH_SINGLE_RAY_TRAVERSAL_QUANT_HPP
+#define BVH_SINGLE_RAY_TRAVERSAL_QUANT_HPP
 
 #include <cassert>
 
@@ -12,7 +12,7 @@ namespace bvh {
 
 /// Single ray traversal algorithm, using the provided ray-node intersector.
 template <typename Bvh, size_t StackSize = 64, typename NodeIntersector = FastNodeIntersector<Bvh>>
-class SingleRayTraverser {
+class SingleRayTraverserQuant {
 public:
     static constexpr size_t stack_size = StackSize;
 
@@ -20,7 +20,7 @@ private:
     using Scalar = typename Bvh::ScalarType;
 
     struct Stack {
-        using Element = typename Bvh::IndexType;
+        using Element = std::pair<typename Bvh::IndexType, std::array<float, 6>>;
 
         Element elements[stack_size];
         size_t size = 0;
@@ -77,13 +77,48 @@ private:
         // This is generally beneficial for performance because intersections will likely be found which will
         // allow to cull more subtrees with the ray-box test of the traversal loop.
         Stack stack;
+        std::array<float, 6> curr_bounds = {
+            bvh.nodes[0].bounds[0],
+            bvh.nodes[0].bounds[1],
+            bvh.nodes[0].bounds[2],
+            bvh.nodes[0].bounds[3],
+            bvh.nodes[0].bounds[4],
+            bvh.nodes[0].bounds[5]
+        };
         auto* left_child = &bvh.nodes[bvh.nodes[0].first_child_or_primitive];
         while (true) {
             statistics.traversal_steps++;
 
             auto* right_child = left_child + 1;
-            auto distance_left  = node_intersector.intersect(left_child->bounds,  ray);
-            auto distance_right = node_intersector.intersect(right_child->bounds, ray);
+
+            float extent[3] = {
+                curr_bounds[1] - curr_bounds[0],
+                curr_bounds[3] - curr_bounds[2],
+                curr_bounds[5] - curr_bounds[4]
+            };
+
+            float exp[3] = {
+                std::powf(2, std::ceil(std::log2((extent[0] == 0.0f ? 1.0f : extent[0]) / 255.0f))),
+                std::powf(2, std::ceil(std::log2((extent[1] == 0.0f ? 1.0f : extent[1]) / 255.0f))),
+                std::powf(2, std::ceil(std::log2((extent[2] == 0.0f ? 1.0f : extent[2]) / 255.0f)))
+            };
+
+            std::array<float, 6> left_bounds = {};
+            std::array<float, 6> right_bounds = {};
+            std::vector<std::pair<typename Bvh::Node*, float*>> child_bounds_pair = {
+                { left_child, left_bounds.data() },
+                { right_child, right_bounds.data() }
+            };
+
+            for (auto &[child, bounds] : child_bounds_pair) {
+                for (int i = 0; i < 3; i++) {
+                    bounds[i * 2] = curr_bounds[i * 2] + child->bounds_quant[i * 2] * exp[i];
+                    bounds[i * 2 + 1] = curr_bounds[i * 2] + child->bounds_quant[i * 2 + 1] * exp[i];
+                }
+            }
+
+            auto distance_left  = node_intersector.intersect(left_bounds.data(),  ray);
+            auto distance_right = node_intersector.intersect(right_bounds.data(), ray);
 
             if (distance_left.first <= distance_left.second) {
                 if (bvh_unlikely(left_child->is_leaf())) {
@@ -108,17 +143,23 @@ private:
             if (left_child) {
                 if (right_child) {
                     statistics.both_intersected++;
-                    if (distance_left.first > distance_right.first)
+                    if (distance_left.first > distance_right.first) {
                         std::swap(left_child, right_child);
-                    stack.push(right_child->first_child_or_primitive);
+                        std::swap(left_bounds, right_bounds);
+                    }
+                    stack.push({right_child->first_child_or_primitive, right_bounds});
                 }
                 left_child = &bvh.nodes[left_child->first_child_or_primitive];
+                curr_bounds = left_bounds;
             } else if (right_child) {
                 left_child = &bvh.nodes[right_child->first_child_or_primitive];
+                curr_bounds = right_bounds;
             } else {
                 if (stack.empty())
                     break;
-                left_child = &bvh.nodes[stack.pop()];
+                auto tmp = stack.pop();
+                left_child = &bvh.nodes[tmp.first];
+                curr_bounds = tmp.second;
             }
         }
 
@@ -139,7 +180,7 @@ public:
         size_t finalize = 0;
     };
 
-    SingleRayTraverser(const Bvh& bvh)
+    SingleRayTraverserQuant(const Bvh& bvh)
         : bvh(bvh)
     {}
 

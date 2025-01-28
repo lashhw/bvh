@@ -24,6 +24,7 @@ struct Bvh {
     // single precision and 64 bytes in double precision.
     struct Node {
         Scalar bounds[6];
+        uint8_t bounds_quant[6];
         IndexType primitive_count;
         IndexType first_child_or_primitive;
 

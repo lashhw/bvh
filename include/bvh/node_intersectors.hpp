@@ -32,14 +32,14 @@ struct NodeIntersector {
     }
 
     bvh_always_inline
-    std::pair<Scalar, Scalar> intersect(const typename Bvh::Node& node, const Ray<Scalar>& ray) const {
+    std::pair<Scalar, Scalar> intersect(const float* bounds, const Ray<Scalar>& ray) const {
         Vector3<Scalar> entry, exit;
-        entry[0] = intersect_axis<true >(0, node.bounds[0 * 2 +     octant[0]], ray);
-        entry[1] = intersect_axis<true >(1, node.bounds[1 * 2 +     octant[1]], ray);
-        entry[2] = intersect_axis<true >(2, node.bounds[2 * 2 +     octant[2]], ray);
-        exit [0] = intersect_axis<false>(0, node.bounds[0 * 2 + 1 - octant[0]], ray);
-        exit [1] = intersect_axis<false>(1, node.bounds[1 * 2 + 1 - octant[1]], ray);
-        exit [2] = intersect_axis<false>(2, node.bounds[2 * 2 + 1 - octant[2]], ray);
+        entry[0] = intersect_axis<true >(0, bounds[0 * 2 +     octant[0]], ray);
+        entry[1] = intersect_axis<true >(1, bounds[1 * 2 +     octant[1]], ray);
+        entry[2] = intersect_axis<true >(2, bounds[2 * 2 +     octant[2]], ray);
+        exit [0] = intersect_axis<false>(0, bounds[0 * 2 + 1 - octant[0]], ray);
+        exit [1] = intersect_axis<false>(1, bounds[1 * 2 + 1 - octant[1]], ray);
+        exit [2] = intersect_axis<false>(2, bounds[2 * 2 + 1 - octant[2]], ray);
         // Note: This order for the min/max operations is guaranteed not to produce NaNs
         return std::make_pair(
             robust_max(entry[0], robust_max(entry[1], robust_max(entry[2], ray.tmin))),
